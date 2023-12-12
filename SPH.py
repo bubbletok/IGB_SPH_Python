@@ -1,5 +1,4 @@
 import pygame
-import sys
 import numpy as np
 
 # Pygame 초기화
@@ -78,6 +77,8 @@ def compute_forces(particles, h):
                 particles[i].fy += pressure_grad_y
 
 def compute_vicosity_force(particles, h):
+    EPSILON = 1e-9
+    mu = dynamic_viscosity = 1.002
     for i in range(len(particles)):
         for j in range(len(particles)):
             if i != j:
@@ -85,8 +86,17 @@ def compute_vicosity_force(particles, h):
                 vel_y = particles[i].vy - particles[j].vy
                 dist_x = particles[i].x - particles[j].x
                 dist_y = particles[i].y - particles[j].y
+                force_x = 0.0
+                force_y = 0.0
 
-                
+                # Softening Function을 적용하여 0으로 나누는 상황 방지
+                softening_term = EPSILON * smoothing_length
+
+                force_x += particles[j].mass * (vel_x/(particles[j].density + softening_term)) * (poly6_kernel(dist_x, h)**2)
+                force_y += particles[j].mass * (vel_y/(particles[j].density + softening_term)) * (poly6_kernel(dist_y, h)**2)
+
+        particles[i].fx += mu * force_x
+        particles[i].fy += mu * force_y
 
 def compute_attraction_force(particles):
     for i in range(len(particles)):
@@ -110,6 +120,32 @@ def update_particles(particles, dt):
         particles[i].x += particles[i].vx * dt
         particles[i].y += particles[i].vy * dt
 
+def update_XSPH(particles, h):
+    eplison = 1e-9
+    EPSILON = 1e-9
+    for i in range(len(particles)):
+        for j in range(len(particles)):
+            if i!=j:
+                dist_x = particles[i].x - particles[j].x
+                dist_y = particles[i].y - particles[j].y
+                vel_x = particles[i].vx - particles[j].vx
+                vel_y = particles[i].vy - particles[j].vy
+
+                temp_correction_x = 0.0
+                temp_correction_y = 0.0
+
+                # Softening Function을 적용하여 0으로 나누는 상황 방지
+                softening_term = EPSILON * smoothing_length
+
+                temp_correction_x += (2*particles[j].mass * vel_x)/(particles[i].density+particles[j].density + softening_term)
+                temp_correction_y += (2*particles[j].mass * vel_y)/(particles[i].density+particles[j].density + softening_term)
+        temp_correction_x *= eplison * vel_x * poly6_kernel(dist_x, h)
+        temp_correction_y *= eplison * vel_y * poly6_kernel(dist_y, h)
+
+        particles[i].x += temp_correction_x
+        particles[i].y += temp_correction_y
+
+
 # 메인 루프
 clock = pygame.time.Clock()
 while True:
@@ -120,9 +156,12 @@ while True:
 
     compute_density_and_pressure(particles, smoothing_length)
     compute_forces(particles, smoothing_length)
+    compute_vicosity_force(particles, smoothing_length)
     compute_attraction_force(particles)
     update_gravity(particles, dt)
     update_particles(particles, dt)
+
+    update_XSPH(particles, smoothing_length)
 
     eplison = 0
     for particle in particles:
