@@ -15,7 +15,7 @@ WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
 
 # 시뮬레이션 매개변수
-num_particles = 100
+num_particles = 50
 particle_radius = 5
 smoothing_length = 20.0
 rho_0 = 1.0
@@ -29,12 +29,14 @@ class Particle:
         self.y = y
         self.vx = vx
         self.vy = vy
+        self.fx = 0.0
+        self.fy = 0.0
         self.mass = mass
 
 # 입자 초기화
 particles = [Particle(
-    x=np.random.uniform(particle_radius, width - particle_radius),
-    y=np.random.uniform(height/2, height),
+    x=np.random.uniform(width/4, width/2),
+    y=np.random.uniform(height/4, height/2),
     vx=0.0,
     vy=0.0,
     mass=1.0
@@ -56,7 +58,7 @@ def compute_density_and_pressure(particles, h):
         particles[i].pressure = gas_constant * (particles[i].density - rho_0)
 
 def compute_forces(particles, h):
-    EPSILON = 1e-9
+    EPSILON = 1e-2
     for i in range(len(particles)):
         particles[i].fx = 0.0
         particles[i].fy = 0.0
@@ -73,11 +75,11 @@ def compute_forces(particles, h):
                     2 * (particles[j].density + softening_term)) * poly6_kernel(dist_x, h)
                 pressure_grad_y = -particles[i].mass * (particles[i].pressure + particles[j].pressure) / (
                     2 * (particles[j].density + softening_term)) * poly6_kernel(dist_y, h)
-                particles[i].fx += pressure_grad_x
-                particles[i].fy += pressure_grad_y
+        particles[i].fx += pressure_grad_x
+        particles[i].fy += pressure_grad_y
 
 def compute_vicosity_force(particles, h):
-    EPSILON = 1e-9
+    EPSILON = 1e-2
     mu = dynamic_viscosity = 1.002
     for i in range(len(particles)):
         for j in range(len(particles)):
@@ -98,16 +100,31 @@ def compute_vicosity_force(particles, h):
         particles[i].fx += mu * force_x
         particles[i].fy += mu * force_y
 
-def compute_attraction_force(particles):
+def check_collision(particles):
     for i in range(len(particles)):
-        for j in range(i+1,len(particles)):
-            dist_x = particles[i].x - particles[j].x
-            dist_y = particles[i].y - particles[j].y
-            dist = np.sqrt(dist_x**2 + dist_y**2)
-            dir_x = dist_x / dist
-            dir_y = dist_y / dist
-            particles[i].fx = dir_x * particles[i].mass * particles[j].mass / dist**2
-            particles[j].fx = dir_y * particles[i].mass * particles[j].mass / dist**2
+        for j in range(len(particles)):
+            if i != j:
+                dist_x = particles[i].x - particles[j].x
+                dist_y = particles[i].y - particles[j].y
+                dist = np.sqrt(dist_x**2 + dist_y**2)
+                if dist <= 2 * particle_radius:
+                    # 충돌 시 위치 업데이트
+                    particles[i].x = particles[j].x + dist_x
+                    particles[i].y = particles[j].y + dist_y
+                    particles[i].vx = 0
+                    particles[i].vy = 0
+
+# def compute_attraction_force(particles):
+#     for i in range(len(particles)):
+#         for j in range(i+1,len(particles)):
+#             dist_x = particles[i].x - particles[j].x
+#             dist_y = particles[i].y - particles[j].y
+#             dist = np.sqrt(dist_x**2 + dist_y**2)
+#             if dist!=0:
+#                 dir_x = dist_x / dist
+#                 dir_y = dist_y / dist
+#                 particles[i].fx = dir_x * particles[i].mass * particles[j].mass / dist**2
+#                 particles[j].fx = dir_y * particles[i].mass * particles[j].mass / dist**2
 
 def update_gravity(particles, dt):
     for i in range(len(particles)):
@@ -152,38 +169,51 @@ while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
-            sys.exit()
-
+        if pygame.key.get_pressed()[pygame.K_SPACE]:
+            print("Space bar pressed")
+            for particle in particles:
+                particle.vx = np.random.uniform(-5,5)
+                particle.vy = np.random.uniform(-100,100)
+        
     compute_density_and_pressure(particles, smoothing_length)
     compute_forces(particles, smoothing_length)
     compute_vicosity_force(particles, smoothing_length)
-    compute_attraction_force(particles)
+    # compute_attraction_force(particles)
+
     update_gravity(particles, dt)
     update_particles(particles, dt)
 
     update_XSPH(particles, smoothing_length)
 
+    # check_collision(particles)
+
     eplison = 0
     for particle in particles:
-        if particle.x < -width + eplison:
-            particle.x = -width + eplison
-            particle.vx = -particle.vx
+        if particle.x < 0:
+            particle.x = eplison
+            particle.vx = -particle.vx/2
         if particle.x > width - eplison:
             particle.x = width - eplison
-            particle.vx = -particle.vx
-        if particle.y < -height + eplison:
-            particle.y = -height - eplison
-            particle.vy = -particle.vy
+            particle.vx = -particle.vx/2
+        if particle.y < 0 + eplison:
+            particle.y =  eplison
+            particle.vy = -particle.vy/2
         if particle.y > height - eplison:
             particle.y = height - eplison
-            particle.vy = -particle.vy
+            particle.vy = -particle.vy/2
+
+    # for particle in particles:
+    #     if particle.x < -width or particle.x > width:
+    #         particle.x = width/2
+    #     if particle.y < -height or particle.y > height:
+    #         particle.y = height/2
 
     # 화면 클리어
     screen.fill(WHITE)
 
     # 입자 그리기
     for particle in particles:
-        pygame.draw.circle(screen, BLUE, (int(particle.x), int(particle.y)), particle_radius)
+        pygame.draw.circle(screen, BLUE, ((particle.x), (particle.y)), particle_radius)
 
     # 화면 업데이트
     pygame.display.flip()
