@@ -1,20 +1,20 @@
 import pygame
 import numpy as np
 
-# Pygame 초기화
+# Pygame setup
 pygame.init()
 
-# 화면 설정
+# Initial setup
 width, height = 100, 100
 screen = pygame.display.set_mode((width, height))
 pygame.display.set_caption("SPH Particle Simulation")
 FPS = 60
 
-# 색깔 정의
+# Color setup
 WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
 
-# 시뮬레이션 매개변수
+# Particle setup
 num_particles = 50
 particle_radius = 5
 smoothing_length = 20.0
@@ -22,7 +22,7 @@ rho_0 = 1.0
 gas_constant = 1.0
 dt = 0.1
 
-# 입자 클래스 정의
+# Particle class
 class Particle:
     def __init__(self, x, y, vx, vy, mass):
         self.x = x
@@ -33,7 +33,7 @@ class Particle:
         self.fy = 0.0
         self.mass = mass
 
-# 입자 초기화
+# Particle initialization
 particles = [Particle(
     x=np.random.uniform(width/4, width/2),
     y=np.random.uniform(height/4, height/2),
@@ -68,7 +68,7 @@ def compute_forces(particles, h):
                 dist_y = particles[i].y - particles[j].y
                 dist = np.sqrt(dist_x**2 + dist_y**2)
 
-                # Softening Function을 적용하여 0으로 나누는 상황 방지
+                # Softening Function to prevent division by zero
                 softening_term = EPSILON * smoothing_length
 
                 pressure_grad_x = -particles[i].mass * (particles[i].pressure + particles[j].pressure) / (
@@ -91,7 +91,7 @@ def compute_vicosity_force(particles, h):
                 force_x = 0.0
                 force_y = 0.0
 
-                # Softening Function을 적용하여 0으로 나누는 상황 방지
+                # Softening Function to prevent division by zero
                 softening_term = EPSILON * smoothing_length
 
                 force_x += particles[j].mass * (vel_x/(particles[j].density + softening_term)) * (poly6_kernel(dist_x, h)**2)
@@ -108,11 +108,14 @@ def check_collision(particles):
                 dist_y = particles[i].y - particles[j].y
                 dist = np.sqrt(dist_x**2 + dist_y**2)
                 if dist <= 2 * particle_radius:
-                    # 충돌 시 위치 업데이트
-                    particles[i].x = particles[j].x + dist_x
-                    particles[i].y = particles[j].y + dist_y
-                    particles[i].vx = 0
-                    particles[i].vy = 0
+                    # get direction
+                    dir_x = dist_x / dist
+                    dir_y = dist_y / dist
+                    # move particles
+                    particles[i].x = particles[j].x - dir_x
+                    particles[i].y = particles[j].y - dir_y
+                    particles[i].vx /=2
+                    particles[i].vy /=2
 
 # def compute_attraction_force(particles):
 #     for i in range(len(particles)):
@@ -151,7 +154,7 @@ def update_XSPH(particles, h):
                 temp_correction_x = 0.0
                 temp_correction_y = 0.0
 
-                # Softening Function을 적용하여 0으로 나누는 상황 방지
+                # Softening Function to prevent division by zero
                 softening_term = EPSILON * smoothing_length
 
                 temp_correction_x += (2*particles[j].mass * vel_x)/(particles[i].density+particles[j].density + softening_term)
@@ -163,7 +166,7 @@ def update_XSPH(particles, h):
         particles[i].y += temp_correction_y
 
 
-# 메인 루프
+# Main loop
 clock = pygame.time.Clock()
 while True:
     for event in pygame.event.get():
@@ -185,7 +188,7 @@ while True:
 
     update_XSPH(particles, smoothing_length)
 
-    # check_collision(particles)
+    check_collision(particles)
 
     eplison = 0
     for particle in particles:
@@ -208,13 +211,11 @@ while True:
     #     if particle.y < -height or particle.y > height:
     #         particle.y = height/2
 
-    # 화면 클리어
     screen.fill(WHITE)
 
-    # 입자 그리기
+    # Draw particles
     for particle in particles:
         pygame.draw.circle(screen, BLUE, ((particle.x), (particle.y)), particle_radius)
 
-    # 화면 업데이트
     pygame.display.flip()
-    clock.tick(FPS)  # FPS 설정
+    clock.tick(FPS)  # FPS
